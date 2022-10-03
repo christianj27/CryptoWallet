@@ -1,0 +1,41 @@
+﻿using ExampleApp.Common.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace ExampleApp.Common.Database.Migrations
+{
+    public class Migration1 : IMigration
+    {
+        private IRepository<Transaction> _repository;
+
+        public Migration1(IRepository<Transaction> repository)
+        {
+            _repository = repository;
+        }
+
+        public async Task Run()
+        {
+            var tableColumns = await _repository.Database.GetTableInfoAsync(typeof(Transaction).Name);
+            //Does the column already exist, that is, did we already run this migration?
+            bool hasUserIdColumn = tableColumns.Any(column => column.Name.Equals("UserId"));
+            bool hasUserEmailColumn = tableColumns.Any(column => column.Name.Equals("UserEmail"));
+            if (hasUserEmailColumn && !hasUserIdColumn)
+            {
+                return;
+            }
+            //transfer data to the new column
+            await _repository.Database.ExecuteAsync("UPDATE [Transaction] SET UserEmail = UserId");
+            //get all saved transactions
+            var savedObjects = await _repository.GetAllAsync();
+            //delete the table
+            await _repository.Database.DropTableAsync<Transaction>();
+            //recreate the table
+            await _repository.Database.CreateTableAsync<Transaction>();
+            //insert saved objects back to the table
+            await _repository.Database.InsertAllAsync(savedObjects);
+        }
+    }
+}
